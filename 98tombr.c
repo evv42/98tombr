@@ -133,7 +133,7 @@ void print_info_mbr(mbrpart p, int i){
 	printf("Start (C/H/S): %d/%d/%d\n",p.scyl + ((MBR_HCSECT_CYL & p.shcsect)<<2),p.shd,p.shcsect & MBR_HCSECT_SEC);
 	printf("End   (C/H/S): %d/%d/%d\n",p.ecyl + ((MBR_HCSECT_CYL & p.ehcsect)<<2),p.ehd,p.ehcsect & MBR_HCSECT_SEC);
 	printf("Start   (LBA): %d\n",p.lbastart);
-	printf("End     (LBA): %d (size %d/%dMB)\n",p.lbastart + p.lbasize,p.lbasize,(p.lbasize*512)/1048576);
+	printf("End     (LBA): %d (size %d/%dMB)\n",p.lbastart + p.lbasize-1,p.lbasize,(p.lbasize*512)/1048576);
 	printf("Type         : 0x%x (%s)\n",p.type,mbr_type(p.type));
 }
 
@@ -164,13 +164,22 @@ mbrpart* get_mbr_suggestion(pc98part* parts){
 	mbrpart* mparts = malloc(sizeof(mbrpart)*MBR_MAX_PARTS);
 	memset(mparts,0,sizeof(mbrpart)*MBR_MAX_PARTS);
 	
-	for(int i = 0; i < MBR_MAX_PARTS && parts[i].scyl != 0; i++){
-		mparts[i].flags = 0x00;
-		mparts[i].shd = 0xFE;mparts[i].shcsect = 0xFF;mparts[i].scyl = 0xFF;
-		mparts[i].ehd = 0xFE;mparts[i].ehcsect = 0xFF;mparts[i].ecyl = 0xFF;
-		mparts[i].lbastart = parts[i].scyl * 136;
-		mparts[i].lbasize = ((parts[i].ecyl - parts[i].scyl)+1) * 136;
-		mparts[i].type = wildguess(parts[i].sid & PC98_SID_MASK);
+	for(int i = 0; i < MBR_MAX_PARTS ; i++){
+		if(parts[i].scyl != 0){
+			mparts[i].flags = 0x00;
+			mparts[i].shd = 0xFE;mparts[i].shcsect = 0xFF;mparts[i].scyl = 0xFF;
+			mparts[i].ehd = 0xFE;mparts[i].ehcsect = 0xFF;mparts[i].ecyl = 0xFF;
+			mparts[i].lbastart = parts[i].scyl * 136;
+			mparts[i].lbasize = ((parts[i].ecyl - parts[i].scyl)+1) * 136;
+			mparts[i].type = wildguess(parts[i].sid & PC98_SID_MASK);
+		}else{
+			mparts[i].flags = 0x00;
+			mparts[i].shd = 0x00;mparts[i].shcsect = 0x00;mparts[i].scyl = 0x00;
+			mparts[i].ehd = 0x00;mparts[i].ehcsect = 0x00;mparts[i].ecyl = 0x00;
+			mparts[i].lbastart = 0;
+			mparts[i].lbasize = 0;
+			mparts[i].type = 0;
+		}
 	}
 	
 	return mparts;
@@ -194,7 +203,7 @@ int write_mbr(char* file){
 	
 	drive = fopen(file,"r+b");
 	fseek(drive,0x1BE,SEEK_SET);
-	for(i = 0; i < MBR_MAX_PARTS && mparts[i].type != 0; i++){
+	for(i = 0; i < MBR_MAX_PARTS; i++){
 		long unsigned int r = fwrite(&mparts[i],sizeof(mbrpart),1,drive);
 		if( r != 1 ){
 			printf("Failed to write partition\n");
@@ -204,8 +213,10 @@ int write_mbr(char* file){
 	}
 	fseek(drive,0x1FE,SEEK_SET);
 	//write MBR signature
-	const uint16_t signature = 0x55AA;
-	long unsigned int r = fwrite(&signature,sizeof(uint16_t),1,drive);
+	const uint8_t signatureh = 0x55;
+	const uint8_t signaturel = 0xAA;
+	long unsigned int r = fwrite(&signatureh,sizeof(uint8_t),1,drive);
+	r = fwrite(&signaturel,sizeof(uint8_t),1,drive);
 	if( r != 1 ){
 		printf("Failed to write MBR signature\n");
 		free(mparts);
