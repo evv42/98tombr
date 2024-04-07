@@ -31,6 +31,7 @@ This program is probably not exempt of bugs, and currently does not have any che
 
 You can use the provided build.sh script. It should work with 99% of UNIX systems.
 On Windows, you can probably use cl if you have Visual Studio installed (not tested).
+**WARNING: This program will not work on big-endian systems**
 
 ## How to use
 
